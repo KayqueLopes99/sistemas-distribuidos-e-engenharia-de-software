@@ -2,11 +2,14 @@
 - Objetivo da disciplina: prover os conceitos básicos dos sistema distribuídos
 modernos com enfoque na produção de aplicações distribuídas, tolerantes a
 falhas, escaláveis e seguras.
-> Unidade I - Introdução aos Sistemas Distribuídos: definição, metas e tipos.Arquiteturas de Sistemas Distribuídos. Processos
+> Unidade I - Introdução aos Sistemas Distribuídos: definição, metas e tipos Arquiteturas de Sistemas Distribuídos. Processos
+
 > Unidade II - Comunicação. Nomeação. Sincronização.
+
 > Unidade III - Consistência e replicação. Tolerância a falhas. Segurança.
 
 > Utilizar o AWS Academy nas atividades práticas da disciplina;
+
 * ○ https://aws.amazon.com/pt/training/awsacademy/
 * ○ AWS Learner Labs;
 * ○ AWS CPoC da UFERSA;
@@ -164,7 +167,7 @@ Nem sempre é possível (ou desejável) esconder totalmente que o sistema é dis
 
   > Exemplo: manter várias cópias de um arquivo (replicação) sempre atualizadas exige tempo extra.
 
--
+
 ### **Quando é bom expor a distribuição (mostrar ao usuário)?**
 
 * **Serviços baseados em localização:**
