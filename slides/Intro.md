@@ -14,6 +14,21 @@ falhas, escaláveis e seguras.
 * ○ AWS Learner Labs;
 * ○ AWS CPoC da UFERSA;
 
+## Comparações:
+- Centralizado: única máquina que faz tudo;
+
+- Distribuído: várias máquinas que fazem tudo;
+
+> Necessidade de sincronizar informações para aceleração do tempo de resposta e processamento em um cenário de muitos usuários.
+
+- Ex: Página ``HTML`` deve ser compartilhada em máquinas para agilidade.
+
+
+
+
+
+
+
 ## Definição de um Sistema Distribuído.
 - Um Sistema Distribuído é uma coleção de elementos computacionais autônomos que se apresenta aos seus usuários como um sistema único e coerente.
 > Elementos computacionais autônomos; 
@@ -45,7 +60,6 @@ falhe.
 ● Pedidos realizado por múltiplos dispositivos (notebooks, celulares, etc);
 ● Diversos departamentos de vendas podem estar envolvidos;
 ● Para os usuários, o sistema se apresenta como um único sistema centralizado
-
 ````
 
 

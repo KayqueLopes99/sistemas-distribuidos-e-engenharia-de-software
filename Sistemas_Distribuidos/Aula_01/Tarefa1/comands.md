@@ -47,3 +47,5 @@ sudo apt install apache2 -y
 - `sudo cp -r dist/* /var/www/html/` [Copia de forma recursiva todo o conteúdo da pasta `dist/` para a pasta raiz do Apache (`/var/www/html/`). O `sudo` é necessário pois esta é uma pasta protegida do sistema.]
 
 
+## OBS: Para ver a aplicação no navegador
+- Use o IP público da sua instância EC2 (ex: `http://seu-ip-publico`) para acessar a aplicação React que você acabou de implantar.
