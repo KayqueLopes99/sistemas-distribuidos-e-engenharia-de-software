@@ -10,9 +10,7 @@ Educadores e alunos têm acesso a materiais de aula e a uma verificação de con
 ---
 
 ## 🎯 Objetivos do módulo
-
-Após a conclusão deste módulo, o aluno será capaz de:
-Claro! Aqui está o conteúdo formatado em **Markdown (.md)**:
+-Após a conclusão deste módulo, o aluno será capaz de:
 
 ---
 

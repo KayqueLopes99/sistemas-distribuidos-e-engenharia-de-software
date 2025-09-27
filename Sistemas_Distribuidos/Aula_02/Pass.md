@@ -21,7 +21,7 @@ npm run build
 
 // Inicia o servidor de desenvolvimento
 npm run dev                       
-````
+```
 
 🔗 Documentação oficial: [Tailwind + Vite](https://tailwindcss.com/docs/installation/using-vite)
 
