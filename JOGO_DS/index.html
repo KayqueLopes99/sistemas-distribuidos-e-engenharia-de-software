@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Banco Imobiliário - Corrigido (posições)</title>
+    <title>Banco Imobiliário - Multiplayer com Nomes</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,7 +11,12 @@
     <div id="board" aria-label="Tabuleiro"></div>
 
     <aside id="sidebar">
-        <h2>Banco Imobiliário (corrigido)</h2>
+        <h2>Banco Imobiliário</h2>
+        
+        <div id="player-info">
+            Clique em um peão no tabuleiro para ver os detalhes do jogador.
+        </div>
+
         <div id="players"></div>
 
         <div class="controls">
@@ -23,6 +28,14 @@
         <h3>Log de Eventos</h3>
         <div id="log"></div>
     </aside>
+    
+    <div id="name-modal-overlay" class="modal-hidden">
+        <div id="name-modal">
+            <h3 id="modal-title"></h3>
+            <input type="text" id="modal-input">
+            <button id="modal-ok-btn">OK</button>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
