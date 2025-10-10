@@ -153,11 +153,17 @@ Para manter sua rede segura, siga estas diretrizes:
 * **Acesso Mínimo:** Configure os Security Groups e Network ACLs para permitir **apenas** o tráfego estritamente necessário. Se um servidor web só precisa da porta 443 (HTTPS), não libere mais nada.
 * **Automatize a Proteção:** Use ferramentas para detectar ameaças e anomalias de forma automática.
 * **Limite a Exposição:** Exponha o mínimo possível de seus recursos para a internet e redes internas.
-### Section 4: AWS Academy Learner Lab best practices
 
+
+### Section 4: AWS Academy Learner Lab best practices
+- Use the allowed Regions. All service access is limited to the us-east-1 and us-west-2 Regions.
+> labRole.
+- Inicie apenas o número de instâncias necessárias e dimensione-as de acordo com suas necessidades. 
+
+- Desative ou exclua recursos de computação quando não precisar mais deles.
 
 
 ### Section 5: Additional resources
-
+- ...
 
 
