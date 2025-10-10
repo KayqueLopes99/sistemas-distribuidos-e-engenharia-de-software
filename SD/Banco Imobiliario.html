@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Banco Imobiliário - Corrigido (posições)</title>
+<title>Banco Imobiliário - Multiplayer com Nomes</title>
 <style>
+/* Estilos originais mantidos */
 .cell.special-inicio { background:#b3d9ff; }
 .cell.special-cadeia { background:#ffcc99; }
 .cell.special-sorte  { background:#d9b3ff; }
@@ -23,13 +24,36 @@
   .prop-name{font-weight:600;font-size:12px}
   .prop-price{font-size:11px;color:#444;margin-top:4px}
   .owner-tag{position:absolute;right:4px;bottom:4px;font-size:11px;color:#111;background:rgba(255,255,255,0.7);padding:2px 6px;border-radius:6px}
-  .token{width:14px;height:14px;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;position:absolute;top:6px;left:6px}
+  .token{width:14px;height:14px;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;position:absolute;top:6px;left:6px;cursor:pointer;transition:transform .2s ease;}
+  .token:hover{transform: scale(1.2);}
   #sidebar{width:340px;background:#fff;padding:12px;border-radius:8px;box-shadow:0 6px 30px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:8px}
   #players{display:flex;flex-direction:column;gap:6px}
   .player-line{display:flex;justify-content:space-between;align-items:center;padding:6px;border-radius:6px;background:rgba(0,0,0,0.03)}
   .controls{display:flex;flex-direction:column;gap:6px}
   button{padding:8px;border-radius:6px;border:1px solid #ccc;background:#fafafa;cursor:pointer}
   #log{height:320px;overflow:auto;background:#efefef;padding:8px;border-radius:6px;border:1px solid #ddd;font-size:13px}
+
+  /* --- NOVO ESTILO PARA O PAINEL DE INFORMAÇÕES DO JOGADOR --- */
+  #player-info {
+    padding: 16px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f9f9f9;
+    min-height: 80px;
+    text-align: left;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  #player-info strong {
+    font-size: 20px;
+    display: block;
+    margin-bottom: 8px;
+  }
+  #player-info span {
+      display: block;
+      margin-bottom: 4px;
+  }
 </style>
 </head>
 <body>
@@ -37,7 +61,12 @@
 <div id="board" aria-label="Tabuleiro"></div>
 
 <aside id="sidebar">
-  <h2>Banco Imobiliário (corrigido)</h2>
+  <h2>Banco Imobiliário</h2>
+  
+  <div id="player-info">
+    Clique em um peão no tabuleiro para ver os detalhes do jogador.
+  </div>
+
   <div id="players"></div>
 
   <div class="controls">
@@ -52,16 +81,16 @@
 
 <script>
 /* Config */
-const GRID = 7;                // 7x7
-const PATH_LENGTH = null;      // será derivado do pathCoords
+const GRID = 7;
+const PATH_LENGTH = null;
 const START_MONEY = 1500;
 const NUM_PLAYERS = 6;
 
 /* estado */
-const grid = [];               // grid[r][c] -> DOM cell
-const pathCoords = [];         // array de {r,c} na ordem do percurso (clockwise)
-let properties = [];           // propriedades (mesma ordem de pathCoords)
-let players = [];              // jogadores
+const grid = [];
+const pathCoords = [];
+let properties = [];
+let players = [];
 let current = 0;
 let canBuy = false;
 
@@ -72,10 +101,10 @@ const logEl = document.getElementById('log');
 const rollBtn = document.getElementById('rollBtn');
 const buyBtn = document.getElementById('buyBtn');
 const endBtn = document.getElementById('endBtn');
+const playerInfoEl = document.getElementById('player-info'); // NOVO: Referência para o painel
 
 /* cria grid 7x7 e pathCoords na ordem correta (sentido horário, iniciando em canto superior esquerdo) */
 function createGridAndPath(){
-  // criar elementos da grade e matriz grid[r][c]
   for(let r=0;r<GRID;r++){
     grid[r]=[];
     for(let c=0;c<GRID;c++){
@@ -86,30 +115,11 @@ function createGridAndPath(){
     }
   }
 
-  // construir pathCoords (clockwise) START: top-left (0,0) -> direita ao longo da linha superior -> desce coluna direita -> volta linha inferior -> sobe coluna esquerda
-  // ordem: (0,0) .. (0,6), (1,6)..(6,6), (6,5)..(6,0), (5,0)..(1,0)
-  for(let c=0;c<GRID;c++) pathCoords.push({r:0,c}); // placeholder to fill with unique coords below
   pathCoords.length = 0;
-
-  // top row left->right
-  for(let c=0;c<GRID;c++) pathCoords.push({r:0,c});
-  // right column top->bottom excluding corner at (0,6)
-  for(let r=1;r<GRID;r++) pathCoords.push({r,c:GRID-1});
-  // bottom row right->left excluding corner (6,6)
-  for(let c=GRID-2;c>=0;c--) pathCoords.push({r:GRID-1,c});
-  // left column bottom->top excluding corners (6,0) and (0,0)
-  for(let r=GRID-2;r>=1;r--) pathCoords.push({r,c:0});
-
-  // now pathCoords length should be 24 for GRID=7
-  // assign those coords properly (we used objects with keys in push but some are wrong: fix)
-  // Actually above pushes used object shorthand incorrectly in some pushes; rebuild properly:
-
-  pathCoords.length = 0;
-  for(let c=0;c<GRID;c++) pathCoords.push({r:0,c:c});              // (0,0) .. (0,6)
-  for(let r=1;r<GRID;r++) pathCoords.push({r:r,c:GRID-1});        // (1,6)..(6,6)
-  for(let c=GRID-2;c>=0;c--) pathCoords.push({r:GRID-1,c:c});     // (6,5)..(6,0)
-  for(let r=GRID-2;r>=1;r--) pathCoords.push({r:r,c:0});          // (5,0)..(1,0)
-  // pathCoords ready
+  for(let c=0;c<GRID;c++) pathCoords.push({r:0,c:c});
+  for(let r=1;r<GRID;r++) pathCoords.push({r:r,c:GRID-1});
+  for(let c=GRID-2;c>=0;c--) pathCoords.push({r:GRID-1,c:c});
+  for(let r=GRID-2;r>=1;r--) pathCoords.push({r:r,c:0});
 }
 
 /* criar propriedades com o mesmo tamanho de pathCoords */
@@ -121,9 +131,7 @@ function createProperties(){
     'Sorte/Revés','Avenida 9','Avenida 10','Imposto','Avenida 11',
     'Sorte/Revés','Avenida 12','Avenida 13','Multa'
   ];
-  // garantir que names.length === pathCoords.length
   if(names.length !== pathCoords.length){
-    // se não bater, reduz/estende automaticamente (não deveria acontecer)
     names.length = pathCoords.length;
   }
 
@@ -132,13 +140,12 @@ function createProperties(){
     return {
       id: i,
       name,
-      price: special ? 0 : 100 + ((i*10) % 300),   // preços simples
+      price: special ? 0 : 100 + ((i*10) % 300),
       rent: special ? 0 : Math.max(10, Math.floor((100 + ((i*10)%300))/6)),
       owner: null
     };
   });
 
-    // desenhar textos nas células correspondentes
   for(let i=0;i<properties.length;i++){
     const {r,c} = pathCoords[i];
     const cell = grid[r][c];
@@ -146,14 +153,12 @@ function createProperties(){
     cell.innerHTML = `<div class="prop-name">${properties[i].name}</div>
                       ${properties[i].price ? `<div class="prop-price">R$ ${properties[i].price}</div>` : ''}`;
 
-    // aplica classes especiais individualmente
     if(/Início/i.test(properties[i].name)) cell.classList.add('special-inicio');
     if(/Cadeia/i.test(properties[i].name)) cell.classList.add('special-cadeia');
     if(/Sorte/i.test(properties[i].name))  cell.classList.add('special-sorte');
     if(/Imposto|Multa/i.test(properties[i].name)) cell.classList.add('special-imposto');
     if(/Parada/i.test(properties[i].name)) cell.classList.add('special-parada');
 
-    // marca também como "corner" (bordas grandes)
     if(/Início|Cadeia|Parada|Multa|Imposto/i.test(properties[i].name)){
       cell.classList.add('corner');
     }
@@ -161,28 +166,50 @@ function createProperties(){
 
 }
 
-/* inicializar jogadores */
+/* MODIFICADO: inicializar jogadores com nomes personalizados */
 function createPlayers(){
   const colors = ['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22'];
   players = [];
   for(let i=0;i<NUM_PLAYERS;i++){
+    let playerName = prompt(`Digite o nome do Jogador ${i+1}:`, `Jogador ${i+1}`);
+    if (!playerName || playerName.trim() === "") {
+        playerName = `Jogador ${i+1}`; // Nome padrão se o campo for deixado em branco
+    }
+    
     players.push({
       id: i,
-      name: `Jogador ${i+1}`,
+      name: playerName, // Usa o nome inserido
       money: START_MONEY,
-      pos: 0,      // posição no pathCoords (0..pathCoords.length-1)
+      pos: 0,
       bankrupt: false,
       color: colors[i]
     });
   }
 }
 
-/* UI: desenha tokens e lista de jogadores */
+/* NOVO: Função para exibir informações de um jogador no painel */
+function showPlayerInfo(playerId) {
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+
+    // Encontra as propriedades do jogador
+    const ownedProperties = properties
+        .filter(prop => prop.owner === playerId)
+        .map(prop => prop.name)
+        .join(', ');
+
+    playerInfoEl.innerHTML = `
+        <strong style="color:${player.color};">${player.name}</strong>
+        <span><strong>💰 Dinheiro:</strong> R$ ${player.money}</span>
+        <span><strong>🏠 Propriedades:</strong> ${ownedProperties || 'Nenhuma'}</span>
+    `;
+}
+
+/* MODIFICADO: UI: desenha tokens e adiciona evento de clique */
 function renderPlayersUI(){
-  // limpar tokens
   document.querySelectorAll('.token').forEach(t => t.remove());
-  // desenhar tokens no respectivo cell (pode haver mais de um token por casa; distribuir offset)
-  const placedCount = {}; // key pos -> count para deslocar tokens
+  
+  const placedCount = {};
   players.forEach(p => {
     if(p.bankrupt) return;
     const pos = p.pos;
@@ -192,15 +219,23 @@ function renderPlayersUI(){
     const token = document.createElement('div');
     token.className = 'token';
     token.style.background = p.color;
-    // deslocamento simples: top-left + small offset por contagem
+    
     const offset = placedCount[pos]-1;
     token.style.left = (6 + (offset*18)) + 'px';
     token.style.top  = (6) + 'px';
     token.title = p.name;
+    
+    // --- ADICIONADO: Atributo e evento de clique no peão ---
+    token.dataset.playerId = p.id;
+    token.addEventListener('click', (e) => {
+        e.stopPropagation(); // Impede que o clique afete outros elementos
+        const id = parseInt(e.currentTarget.dataset.playerId);
+        showPlayerInfo(id);
+    });
+
     cell.appendChild(token);
   });
 
-  // players list
   playersEl.innerHTML = '';
   players.forEach((p,idx) => {
     const div = document.createElement('div');
@@ -213,7 +248,6 @@ function renderPlayersUI(){
 
 /* mostrar owner no cell */
 function renderOwners(){
-  // limpar estilos de ownership antes
   properties.forEach((prop,i)=>{
     const {r,c} = pathCoords[i];
     const cell = grid[r][c];
@@ -229,7 +263,6 @@ function renderOwners(){
       cell.style.background = color;
       cell.classList.add("owned");
     } else {
-      // reaplicar cores das especiais se não tiver dono
       if(/Início/i.test(prop.name)) cell.classList.add('special-inicio');
       if(/Cadeia/i.test(prop.name)) cell.classList.add('special-cadeia');
       if(/Sorte/i.test(prop.name)) cell.classList.add('special-sorte');
@@ -238,7 +271,6 @@ function renderOwners(){
     }
   });
 
-  // remover owner tags antes
   document.querySelectorAll('.owner-tag').forEach(t => t.remove());
   properties.forEach((prop,i) => {
     if(prop.owner !== null){
@@ -252,7 +284,6 @@ function renderOwners(){
   });
 }
 
-
 /* log */
 function log(msg){
   const d = document.createElement('div');
@@ -261,45 +292,40 @@ function log(msg){
 }
 
 /* movimento e ações */
-let alreadyRolled = false; // controla se já rolou no turno atual
+let alreadyRolled = false;
 
 function rollDice(){
   const p = players[current];
   if(p.bankrupt) { nextTurn(); return; }
-
   if(alreadyRolled) { 
-    log("Você já rolou o dado neste turno. Encerrre o turno ou espere um 6.");
+    log("Você já rolou o dado neste turno. Passe a vez.");
     return; 
   }
 
-  const d = Math.floor(Math.random()*6)+1; // só 1 dado
-log(`${p.name} rolou ${d}`);
+  const d = Math.floor(Math.random()*6)+1;
+  log(`${p.name} rolou ${d}`);
 
-const oldPos = p.pos;
-p.pos = (p.pos + d);
+  const oldPos = p.pos;
+  p.pos = (p.pos + d);
 
-// se ultrapassou o final do tabuleiro → deu a volta
-if (p.pos >= pathCoords.length) {
-    p.pos = p.pos % pathCoords.length;
-    p.money += 200;
-    log(`${p.name} passou pelo INÍCIO e recebeu R$200!`);
-}
+  if (p.pos >= pathCoords.length) {
+      p.pos = p.pos % pathCoords.length;
+      p.money += 200;
+      log(`${p.name} passou pelo INÍCIO e recebeu R$200!`);
+  }
 
-handleLanding(p);
-
+  handleLanding(p);
   renderPlayersUI();
   renderOwners();
 
-  // se for 6 → pode jogar de novo
   if(d === 6){
     log(`${p.name} tirou 6 e pode jogar de novo!`);
-    alreadyRolled = false; // libera de novo
+    alreadyRolled = false;
   } else {
-    alreadyRolled = true;  // marcou que já rolou
-    rollBtn.disabled = true; // trava botão até passar turno
+    alreadyRolled = true;
+    rollBtn.disabled = true;
   }
 
-  // se caiu em propriedade livre, habilita compra
   const prop = properties[p.pos];
   canBuy = (prop && prop.price>0 && prop.owner===null && !p.bankrupt);
   buyBtn.disabled = !canBuy;
@@ -309,28 +335,25 @@ function handleLanding(player){
   const prop = properties[player.pos];
   log(`${player.name} caiu em ${prop.name}`);
   if(prop.price === 0){
-    // especiais
     if(/Imposto|Multa/i.test(prop.name)){
       const amt = 100;
       player.money -= amt;
       log(`${player.name} pagou imposto: R$${amt}`);
       checkBankruptcy(player);
     } else if(/Sorte/i.test(prop.name)){
-      const val = Math.floor(Math.random()*301)-100; // -100..+200
+      const val = Math.floor(Math.random()*301)-100;
       player.money += val;
       log(`${player.name} obteve carta: ${val>=0?'+':'-'}R$${Math.abs(val)}`);
       checkBankruptcy(player);
     } else if(/Cadei/i.test(prop.name)){
       log(`${player.name} está apenas visitando a cadeia.`);
     } else if(/Início/i.test(prop.name)){
-      // passar pelo início dar R$200? decidi dar só caso passe nele (aqui se cair diretamente, também dá)
       player.money += 200;
       log(`${player.name} recebeu R$200 no Início.`);
     }
   } else {
     if(prop.owner === null){
       log(`Propriedade disponível: ${prop.name} por R$${prop.price}`);
-      // botão comprar habilitado no rollDice
     } else if(prop.owner !== player.id){
       const rent = prop.rent;
       player.money -= rent;
@@ -368,12 +391,10 @@ function buyProperty(){
 function checkBankruptcy(player){
   if(player.money < 0 && !player.bankrupt){
     player.bankrupt = true;
-    // devolver propriedades ao banco
     properties.forEach(pr => { if(pr.owner === player.id) pr.owner = null; });
     log(`${player.name} faliu e saiu do jogo.`);
     renderOwners();
     renderPlayersUI();
-    // checar vencedor
     const alive = players.filter(p => !p.bankrupt);
     if(alive.length === 1){
       log(`🏆 Vitória: ${alive[0].name}`);
@@ -388,10 +409,9 @@ function checkBankruptcy(player){
 function nextTurn(){
   canBuy = false;
   buyBtn.disabled = true;
-  rollBtn.disabled = false;  // libera botão para próximo jogador
-  alreadyRolled = false;     // reseta flag
+  rollBtn.disabled = false;
+  alreadyRolled = false;
 
-  // avança para próximo jogador ativo
   let next = current;
   for(let i=1;i<=players.length;i++){
     const idx = (current + i) % players.length;
@@ -411,7 +431,7 @@ endBtn.addEventListener('click', ()=>{ nextTurn(); });
 function init(){
   createGridAndPath();
   createProperties();
-  createPlayers();
+  createPlayers(); // Esta função agora pedirá os nomes
   renderPlayersUI();
   renderOwners();
   log('Jogo iniciado. É a vez de ' + players[current].name);
