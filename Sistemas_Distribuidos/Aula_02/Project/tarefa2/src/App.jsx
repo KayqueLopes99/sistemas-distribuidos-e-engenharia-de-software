@@ -1,381 +1,745 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
-import './index.css'; // Tailwind / estilos
+import React, { useState, useEffect } from 'react';
 
-// --- Constantes do Jogo ---
-const GAME_TIME = 30; // segundos
-const SPAWN_INTERVAL = 900; // ms
-const POKEMON_STAY_TIME = 10000; // ms
+//  --- DATA AND CONFIGURATION ---
 
-// --- Endpoints ---
-const SCORES_API = 'https://g7ei7esoti.execute-api.us-east-1.amazonaws.com/v1/items';
+ // Cores para cada tipo de Pokémon. Essencial para o estilo das seções.
+ const pokemonTypeColors = {
+   normal: '#A8A77A',
+   fire: '#FF6723',
+   water: '#3393F2',
+   electric: '#F9D839',
+   grass: '#60D352',
+   ice: '#4DD2C1',
+   fighting: '#D94255',
+   poison: '#B654D9',
+   ground: '#D5B45A',
+   flying: '#90A8F1',
+   psychic: '#FA65B5',
+   bug: '#AABE2B',
+   rock: '#C9B767',
+   ghost: '#7A72D4',
+   dragon: '#0C6ACD',
+   dark: '#595761',
+   steel: '#5A8EA1',
+   fairy: '#EE90E6',
+   stellar: '#4CE4AD',  // Type added in Scarlet & Violet
+ };
 
-// --- Lista completa de Pokémons (com imagens públicas) ---
-const POKEMON_LIST = [
-  { id: 1, name: 'Bulbasaur', points: 10, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/1.png' },
-  { id: 4, name: 'Charmander', points: 10, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/4.png' },
-  { id: 7, name: 'Squirtle', points: 10, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/7.png' },
-  { id: 25, name: 'Pikachu', points: 20, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/25.png' },
-  { id: 10, name: 'Caterpie', points: 5, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/10.png' },
-  { id: 16, name: 'Pidgey', points: 5, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/16.png' },
-  { id: 41, name: 'Zubat', points: 5, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/41.png' },
-  { id: 129, name: 'Magikarp', points: 1, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/129.png' },
-  { id: 123, name: 'Scyther', points: 50, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/123.png' },
-  { id: 127, name: 'Pinsir', points: 60, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/127.png' },
-  { id: 128, name: 'Tauros', points: 60, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/128.png' },
-  { id: 63, name: 'Abra', points: 75, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/63.png' },
-  { id: 113, name: 'Chansey', points: 100, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/113.png' },
-  { id: 147, name: 'Dratini', points: 30, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/147.png' },
-  { id: 54, name: 'Psyduck', points: 15, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/54.png' },
-  { id: 92, name: 'Gastly', points: 25, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/92.png' },
-  { id: 52, name: 'Meowth', points: 12, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/52.png' },
-  { id: 84, name: 'Doduo', points: 18, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/84.png' },
-  { id: 133, name: 'Eevee', points: 40, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/133.png' },
-  { id: 143, name: 'Snorlax', points: 80, img: 'https://raw.githack.com/PokeAPI/sprites/master/sprites/pokemon/143.png' }
-];
-
-// --- Subcomponente Pokémon ---
-const Pokemon = ({ pokemon, onCatch }) => {
-  const { instanceId, name, points, img, x, y, isCaught } = pokemon;
-  const handleCatch = () => { if (!isCaught) onCatch(instanceId, name, points); };
-  return (
-    <img
-      src={img}
-      alt={name}
-      className={`absolute w-20 h-20 cursor-pointer transition-all duration-300 ease-out 
-                  hover:scale-110 active:scale-90 select-none
-                  ${isCaught ? 'opacity-0' : 'opacity-100'}`}
-      style={{ top: y, left: x }}
-      onClick={handleCatch}
-      onMouseDown={(e) => e.preventDefault()}
-    />
-  );
-};
-
-// --- App principal ---
-function App() {
-  // Estados do jogo
-  const [playerName, setPlayerName] = useState('');
-  const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(GAME_TIME);
-  const [isGameRunning, setIsGameRunning] = useState(false);
-  const [activePokemon, setActivePokemon] = useState([]);
-  const [caughtPokemonList, setCaughtPokemonList] = useState([]);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
-
-  // Modal / envio
-  const [showModal, setShowModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Leaderboard por jogador (agregado)
-  const [playersRanking, setPlayersRanking] = useState([]);
-  const [isLoadingScores, setIsLoadingScores] = useState(false);
-  const [scoresError, setScoresError] = useState(null);
-
-  // refs
-  const gameAreaRef = useRef(null);
-  const pokemonCounterRef = useRef(0);
-  const gameTimerRef = useRef(null);
-  const spawnTimerRef = useRef(null);
-
-  // Reset
-  const resetGame = () => {
-    if (gameTimerRef.current) { clearInterval(gameTimerRef.current); gameTimerRef.current = null; }
-    if (spawnTimerRef.current) { clearInterval(spawnTimerRef.current); spawnTimerRef.current = null; }
-
-    setScore(0);
-    setTimeLeft(GAME_TIME);
-    setIsGameRunning(false);
-    setActivePokemon([]);
-    setCaughtPokemonList([]);
-    setCurrentSessionId(null);
-    setShowModal(false);
-    setIsSubmitting(false);
-  };
-
-  // Start
-  const startGame = () => {
-    if (!playerName.trim()) { alert('Por favor, digite seu nome de jogador!'); return; }
-    resetGame();
-    setCurrentSessionId(`safari_${Date.now()}`);
-    setIsGameRunning(true);
-  };
-
-  // Spawn
-  const spawnPokemon = useCallback(() => {
-    if (!gameAreaRef.current || !isGameRunning) return;
-    const randomPokemonData = POKEMON_LIST[Math.floor(Math.random() * POKEMON_LIST.length)];
-    const { width, height } = gameAreaRef.current.getBoundingClientRect();
-    const x = Math.random() * (width - 80);
-    const y = Math.random() * (height - 80);
-    const newPokemon = { ...randomPokemonData, instanceId: pokemonCounterRef.current++, x, y, isCaught: false };
-    setActivePokemon(prev => [...prev, newPokemon]);
-    setTimeout(() => {
-      setActivePokemon(prev => prev.filter(p => p.instanceId !== newPokemon.instanceId || p.isCaught));
-    }, POKEMON_STAY_TIME);
-  }, [isGameRunning]);
-
-  // Catch
-  const catchPokemon = useCallback((instanceId, name, points) => {
-    if (!isGameRunning) return;
-    setScore(prev => prev + points);
-    setCaughtPokemonList(prev => [...prev, { POKEMON: name, PONTUACAO: points }]);
-    setActivePokemon(prev => prev.map(p => p.instanceId === instanceId ? { ...p, isCaught: true } : p));
-    setTimeout(() => setActivePokemon(prev => prev.filter(p => p.instanceId !== instanceId)), 300);
-  }, [isGameRunning]);
-
-  // Timers
-  useEffect(() => {
-    if (isGameRunning) {
-      gameTimerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            setIsGameRunning(false);
-            setShowModal(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      spawnTimerRef.current = setInterval(spawnPokemon, SPAWN_INTERVAL);
-      spawnPokemon();
-    } else {
-      if (gameTimerRef.current) { clearInterval(gameTimerRef.current); gameTimerRef.current = null; }
-      if (spawnTimerRef.current) { clearInterval(spawnTimerRef.current); spawnTimerRef.current = null; }
-    }
-    return () => {
-      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-      if (spawnTimerRef.current) clearInterval(spawnTimerRef.current);
-    };
-  }, [isGameRunning, spawnPokemon]);
-
-  // --- Função para buscar pontuações e agregar por jogador (melhor pontuação) ---
-  const fetchScores = useCallback(async () => {
-    setIsLoadingScores(true);
-    setScoresError(null);
-    try {
-      const resp = await axios.get(SCORES_API);
-      const data = resp.data;
-
-      // Normaliza a lista de items do formato possível da API
-      let items = [];
-      if (Array.isArray(data)) items = data;
-      else if (data.Items) items = data.Items;
-      else if (data.items) items = data.items;
-      else if (data.body) {
-        // caso a API retorne um wrapper
-        try {
-          const parsed = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
-          if (Array.isArray(parsed)) items = parsed;
-          else if (parsed.Items) items = parsed.Items;
-        } catch (e) {
-          // ignore
-        }
-      } else {
-        // fallback (se data for objeto simples)
-        items = Array.isArray(data) ? data : [];
-      }
-
-      // Normalizar campos de cada item para: id, nome, pontuacao
-      const normalized = items.map(i => ({
-        id: i.id ?? i.ID ?? i.Id ?? '',
-        nome: i.nome ?? i.nome_jogador ?? i.NOME ?? i.name ?? i.nome_jogador ?? '',
-        pontuacao: Number(i.pontuacao ?? i.pontuacao_total ?? i.PONTUACAO ?? i.points ?? 0)
-      }));
-
-      // Agregar por jogador: manter a maior pontuação por nome
-      const byPlayer = {};
-      normalized.forEach(item => {
-        const key = (item.nome || 'Anônimo').trim();
-        if (!byPlayer[key]) {
-          byPlayer[key] = { nome: key, best: item.pontuacao, plays: 1 };
-        } else {
-          byPlayer[key].plays += 1;
-          if (item.pontuacao > byPlayer[key].best) byPlayer[key].best = item.pontuacao;
-        }
-      });
-
-      const players = Object.values(byPlayer);
-
-      // Ordenar por melhor pontuação desc
-      players.sort((a, b) => b.best - a.best);
-
-      setPlayersRanking(players);
-    } catch (err) {
-      console.error('Erro ao buscar pontuações:', err);
-      setScoresError(err.message || 'Erro desconhecido');
-      setPlayersRanking([]);
-    } finally {
-      setIsLoadingScores(false);
-    }
-  }, []);
-
-  // Busca inicial
-  useEffect(() => {
-    fetchScores();
-  }, [fetchScores]);
-
-  // --- Envio da pontuação para a API (PUT /items) ---
-  const handleSubmitScore = async () => {
-  if (!playerName.trim()) { alert('Por favor, digite seu nome.'); return; }
-  setIsSubmitting(true);
-  const payload = {
-    id: currentSessionId || `safari_${Date.now()}`,
-    nome: playerName,
-    pontuacao: score
-  };
-
-  try {
-  console.log('Enviando payload:', payload);
-  const url = `${SCORES_API}`; // envia para /v1/items via POST
-  const resp = await axios.post(url, payload, {
-    headers: { 'Content-Type': 'application/json' },
-  });
-  console.log('POST resp:', resp.status, resp.data);
-  alert(`Pontuação de ${playerName} (${score}) enviada com sucesso!`);
-  await fetchScores();
-}
-catch (err) {
-    console.error('Erro ao enviar pontuação (detalhes):', err);
-    if (err.response) {
-      console.error('Resposta da API:', err.response.status, err.response.data);
-      alert(`Erro da API: ${err.response.status} - ${JSON.stringify(err.response.data)}`);
-    } else {
-      alert(`Erro de rede/CORS: ${err.message}`);
-    }
-  } finally {
-    setIsSubmitting(false);
-    resetGame();
-  }
-};
+  // --- HELPER FUNCTION ---
+ // Esta função organiza uma lista de favoritos por tipo.
+ const populateTypesFromFavorites = (favoriteList) => {
+   const types = {};
+   favoriteList.forEach(pokemon => {
+     if (pokemon.types && Array.isArray(pokemon.types)) {
+       pokemon.types.forEach(({ type }) => {
+         const typeName = type.name;
+         if (!types[typeName]) {
+           types[typeName] = [];
+         }
+         if (!types[typeName].some(p => p.id === pokemon.id)) {
+           types[typeName].push(pokemon);
+         }
+       });
+     }
+   });
+   return types;
+ };
 
 
-  // Render
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-300 to-green-400 flex flex-col items-center justify-center p-4 font-pixel tracking-tighter">
-      <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-6 text-center">Pokémon Safari Zone</h1>
+  // --- REUSABLE COMPONENTS ---
 
-      <div className="flex flex-col md:flex-row items-start w-full max-w-6xl gap-6">
-        {/* Jogo */}
-        <div className="flex-1 bg-white p-6 rounded-lg shadow-xl border-4 border-blue-500">
-          <div className="flex flex-col md:flex-row items-center justify-between w-full mb-6 space-y-4 md:space-y-0 md:space-x-4">
-            <input
-              type="text"
-              placeholder="Seu nome de jogador"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              disabled={isGameRunning}
-              className="p-2 border-2 border-gray-300 rounded-md text-lg w-full md:w-auto flex-grow text-gray-700"
-            />
-            <button
-              onClick={startGame}
-              disabled={isGameRunning || !playerName.trim()}
-              className="px-6 py-3 bg-yellow-400 text-blue-800 font-bold rounded-md shadow-md hover:bg-yellow-500 transition-colors duration-200 text-lg disabled:opacity-50 w-full md:w-auto"
-            >
-              {isGameRunning ? 'Safari em Andamento...' : 'Iniciar Safari!'}
-            </button>
-          </div>
+ // Ícone de Estrela para Favoritos (SVG)
+ const FavoriteIcon = ({ isFavorite, ...props }) => (
+   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+   </svg>
+ );
 
-          <div className="flex justify-around w-full mb-6 text-xl md:text-2xl font-bold text-gray-700">
-            <p>Pontuação: <span className="text-green-600">{score}</span></p>
-            <p>Tempo: <span className="text-red-600">{timeLeft}s</span></p>
-          </div>
+  //Card para exibir um Pokémon
+ const PokemonCard = ({ pokemon, onFavoriteToggle, isFavorite, onClick }) => {
+   const imageUrl = pokemon.sprites?.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`;
+  
+   return (
+     <div className="group relative bg-gray-800/50 backdrop-blur-sm border border-gray-600 rounded-lg shadow-md hover:shadow-xl hover:border-gray-500 transition-all duration-300 p-4 flex flex-col items-center text-center">
+       <div onClick={() => onClick(pokemon)} className="cursor-pointer">
+         <img src={imageUrl} alt={pokemon.name} className="w-32 h-32 object-contain drop-shadow-lg group-hover:scale-110 transition-transform" />
+         {/* MODIFICADO: Cor do texto para branco/cinza claro para melhor visibilidade */}
+         <h3 className="mt-2 text-lg font-bold text-gray-100 capitalize">{pokemon.name.replace(/-/g, ' ')}</h3>
+         <p className="text-sm text-gray-400">#{String(pokemon.id).padStart(3, '0')}</p>
+         <div className="flex gap-1 mt-2 justify-center min-h-[20px]">
+           {pokemon.types?.map(({ type }) => (
+             <span
+               key={type.name}
+               className="px-2 py-0.5 text-xs text-white rounded-full font-semibold capitalize"
+               style={{ backgroundColor: pokemonTypeColors[type.name] || '#A8A77A' }}
+             >
+               {type.name}
+             </span>
+           ))}
+         </div>
+       </div>
+       {onFavoriteToggle && (
+         <button onClick={() => onFavoriteToggle(pokemon)} className="absolute top-2 right-2 text-yellow-400 hover:text-yellow-500 transition-colors z-10">
+           <FavoriteIcon isFavorite={isFavorite} />
+         </button>
+       )}
+     </div>
+   );
+ };
 
-          <div
-            ref={gameAreaRef}
-            className="relative w-full h-96 bg-green-200 border-4 border-green-700 rounded-lg overflow-hidden cursor-crosshair"
-            style={{
-              backgroundImage: "url('https://raw.githack.com/jennieroo/pokemon-safari-zone/master/public/img/grass-bg.png')",
-              backgroundSize: '32px',
-              backgroundRepeat: 'repeat',
-              imageRendering: 'pixelated'
-            }}
-          >
-            {activePokemon.map(p => <Pokemon key={p.instanceId} pokemon={p} onCatch={catchPokemon} />)}
-          </div>
-        </div>
-
-        {/* Ranking / painel lateral */}
-        <div className="w-80 bg-white p-4 rounded-lg shadow-lg border-2 border-gray-200">
-          <h3 className="text-xl font-bold mb-3">Ranking (melhor por jogador)</h3>
-
-          <div className="mb-3 flex gap-2">
-            <button onClick={fetchScores} className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
-              Atualizar
-            </button>
-            <button onClick={() => { setPlayersRanking([]); fetchScores(); }} className="px-3 bg-gray-200 rounded hover:bg-gray-300">
-              Limpar
-            </button>
-          </div>
-
-          {isLoadingScores && <p>Carregando...</p>}
-          {scoresError && <p className="text-red-600">Erro: {scoresError}</p>}
-
-          {!isLoadingScores && !scoresError && (
-            <div className="overflow-y-auto max-h-72">
-              {playersRanking.length === 0 ? (
-                <p className="text-sm text-gray-500">Nenhuma pontuação registrada</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      <th className="text-left">#</th>
-                      <th className="text-left">Nome</th>
-                      <th className="text-right">Melhor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playersRanking.map((p, idx) => (
-                      <tr key={p.nome || idx} className="border-t">
-                        <td className="py-1">{idx + 1}</td>
-                        <td className="py-1">{p.nome}</td>
-                        <td className="py-1 text-right font-bold">{p.best}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-        </div>
+  //Componente para os cabeçalhos das seções
+ const SectionHeader = ({ title, color }) => (
+      <div className="flex items-center gap-4 mb-6 p-3 rounded-lg shadow-md" style={{ backgroundColor: `${color}20` }}>
+          <div className="w-2 h-8 rounded-full" style={{ backgroundColor: color }}></div>
+          <h2 className="text-3xl font-bold capitalize" style={{ color }}>{title}</h2>
       </div>
+ );
 
-      {/* Modal fim de jogo */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
-            <h2 className="text-3xl font-bold mb-4 text-gray-800">Tempo Esgotado!</h2>
-            <p className="text-xl mb-6 text-gray-600">Sua pontuação: <span className="font-bold text-blue-600">{score}</span></p>
+  //Seção para um tipo de Pokémon
+ const TypeSection = ({ type, color, pokemons, onFavoriteToggle, favorites, onCardClick }) => (
+   <section id={type} className="mb-12 scroll-mt-20">
+     <SectionHeader title={type} color={color} />
+     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+       {pokemons.map(p => (
+         <PokemonCard 
+           key={p.id} 
+           pokemon={p} 
+           onFavoriteToggle={onFavoriteToggle}
+           isFavorite={favorites.some(fav => fav.id === p.id)}
+           onClick={onCardClick}
+         />
+       ))}
+     </div>
+   </section>
+ );
 
-            <p className="text-left text-gray-700 font-bold mb-2">Salvar pontuação:</p>
-            <input
-              type="text"
-              placeholder="Confirme seu nome"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded mb-4 text-lg text-gray-700"
-            />
+  //Modal para exibir detalhes do Pokémon
+ const PokemonModal = ({ pokemon, onClose, isLoading }) => {
+   if (!pokemon) return null;
 
-            <button
-              onClick={handleSubmitScore}
-              disabled={isSubmitting || !playerName.trim()}
-              className="w-full bg-blue-500 text-white p-3 rounded-lg text-lg font-bold hover:bg-blue-600 transition-colors disabled:bg-gray-400"
-            >
-              {isSubmitting ? 'Enviando...' : 'Enviar Pontuação'}
-            </button>
+   const imageUrl = pokemon.sprites?.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`;
 
-            <button
-              onClick={resetGame}
-              disabled={isSubmitting}
-              className="w-full bg-gray-300 text-gray-700 p-2 rounded-lg text-md font-bold hover:bg-gray-400 transition-colors mt-3"
-            >
-              Jogar Novamente (Sem Salvar)
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+   return (
+     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50" onClick={onClose}>
+       <div className="bg-white rounded-xl shadow-2xl w-11/12 max-w-md mx-auto p-6 relative text-gray-900" onClick={(e) => e.stopPropagation()}>
+         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+         <div className="flex flex-col items-center text-center">
+           <img src={imageUrl} alt={pokemon.name} className="w-48 h-48 object-contain drop-shadow-xl" />
+           <h2 className="text-3xl font-bold text-gray-900 mt-4 capitalize">{pokemon.name.replace(/-/g, ' ')}</h2>
+           <p className="text-sm text-gray-500">#{String(pokemon.id).padStart(3, '0')}</p>
+           <div className="flex gap-2 mt-2 justify-center">
+             {pokemon.types?.map(({ type }) => (
+               <span key={type.name} className="px-3 py-1 text-sm text-white rounded-full font-semibold capitalize" style={{ backgroundColor: pokemonTypeColors[type.name] || '#A8A77A' }}>
+                 {type.name}
+               </span>
+             ))}
+           </div>
+           <div className="mt-4 text-gray-700 w-full text-left p-4 bg-gray-50 rounded-lg min-h-[100px]">
+             <h4 className="font-bold mb-2">Entrada da Pokédex</h4>
+             {isLoading ? (
+               <p>Carregando descrição...</p>
+             ) : (
+               <p>{pokemon.description || 'Nenhuma descrição disponível.'}</p>
+             )}
+           </div>
+         </div>
+       </div>
+     </div>
+   );
+ };
 
-export default App;
+ // Barra de Navegação por Tipo
+ const TypeNavigation = ({ types }) => (
+ //   MODIFICADO: Fundo mais escuro para melhor contraste com o texto
+   <nav className="mb-12 p-4 bg-black/20 backdrop-blur-md rounded-lg shadow-inner">
+     {/* MODIFICADO: Cor do texto para branco */}
+     <h3 className="text-xl font-bold text-center text-white mb-4">Navegar para Seção</h3>
+     <div className="flex flex-wrap justify-center gap-2">
+       <a href="#mega-evolutions" className="px-4 py-1 text-sm text-white font-semibold rounded-full shadow-md hover:scale-105 transform transition-transform duration-200" style={{ backgroundColor: '#4A5568' }}>Mega Evoluções</a>
+       <a href="#gigantamax" className="px-4 py-1 text-sm text-white font-semibold rounded-full shadow-md hover:scale-105 transform transition-transform duration-200" style={{ backgroundColor: '#EF4444' }}>Gigantamax</a>
+       <a href="#items" className="px-4 py-1 text-sm text-white font-semibold rounded-full shadow-md hover:scale-105 transform transition-transform duration-200" style={{ backgroundColor: '#A0A0A0' }}>Itens</a>
+       {Object.entries(types).map(([typeName, typeColor]) => (
+         <a
+           key={typeName}
+           href={`#${typeName}`}
+           className="px-4 py-1 text-sm text-white font-semibold rounded-full shadow-md hover:scale-105 transform transition-transform duration-200 capitalize"
+           style={{ backgroundColor: typeColor }}
+         >
+           {typeName}
+         </a>
+       ))}
+     </div>
+   </nav>
+ );
+
+ // --- COMPONENTES DO TEAM BUILDER ---
+ const TeamBuilder = ({ favorites, onSaveTeam }) => {
+   const [currentTeam, setCurrentTeam] = useState([]);
+
+   const handleAddToTeam = (pokemon) => {
+     if (currentTeam.length < 6 && !currentTeam.some(p => p.id === pokemon.id)) {
+       setCurrentTeam([...currentTeam, pokemon]);
+     }
+   };
+
+   const handleRemoveFromTeam = (pokemon) => {
+     setCurrentTeam(currentTeam.filter(p => p.id !== pokemon.id));
+   };
+
+   const handleFinalize = () => {
+     if (currentTeam.length > 0) {
+       onSaveTeam(currentTeam);
+       setCurrentTeam([]);
+     }
+   };
+
+   const teamSlots = Array(6).fill(null);
+   currentTeam.forEach((p, i) => teamSlots[i] = p);
+
+   return (
+     <section id="team-builder" className="mb-12 scroll-mt-20">
+       <SectionHeader title="Montador de Equipe" color="#6366F1" />
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+         <div>
+           {/* MODIFICADO: Cor do texto para branco/cinza claro */}
+           <h3 className="text-xl font-bold text-gray-100 mb-4">Equipe Atual</h3>
+           <div className="grid grid-cols-3 gap-4 bg-black/20 p-4 rounded-lg">
+            
+             {teamSlots.map((pokemon, index) => (
+                // MODIFICADO: Fundo do slot e cor do texto para melhor contraste
+               <div key={index} className="h-28 bg-gray-900/50 rounded-lg flex justify-center items-center border-2 border-dashed border-gray-600">
+                 {pokemon ? (
+                   <img
+                     src={pokemon.sprites.front_default}
+                     alt={pokemon.name}
+                     className="w-20 h-20 object-contain cursor-pointer"
+                     onClick={() => handleRemoveFromTeam(pokemon)}
+                     title={`Remover ${pokemon.name}`}
+                   />
+                 ) : (
+                   <span className="text-gray-400 text-sm">Slot {index + 1}</span>
+                 )}
+               </div>
+             ))}
+           </div>
+           <div className="mt-4 flex gap-4">
+               <button
+                 onClick={handleFinalize}
+                 disabled={currentTeam.length === 0}
+                 className="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-green-600 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+               >
+                 Finalizar Equipe
+               </button>
+               <button
+                 onClick={() => setCurrentTeam([])}
+                 className="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition-colors"
+               >
+                 Limpar
+               </button>
+           </div>
+         </div>
+         <div>
+           {/* MODIFICADO: Cor do texto para branco/cinza claro */}
+           <h3 className="text-xl font-bold text-gray-100 mb-4">Escolha dos Favoritos</h3>
+           {favorites.length > 0 ? (
+             <div className="grid grid-cols-3 gap-4 max-h-96 overflow-y-auto bg-black/20 p-4 rounded-lg">
+               {favorites.map(p => (
+                 <div key={p.id} className="text-center cursor-pointer p-2 rounded-lg hover:bg-gray-700/50" onClick={() => handleAddToTeam(p)}>
+                   <img src={p.sprites.front_default} alt={p.name} className="w-20 h-20 mx-auto" />
+                   {/* MODIFICADO: Cor do texto para branco */}
+                   <p className="text-sm capitalize font-semibold text-white">{p.name}</p>
+                 </div>
+               ))}
+             </div>
+           ) : (
+             // MODIFICADO: Cor do texto para cinza claro
+             <p className="text-gray-400 italic">Adicione Pokémon aos seus favoritos para montar uma equipe.</p>
+           )}
+         </div>
+       </div>
+     </section>
+   );
+ };
+
+ const SavedTeams = ({ teams, onDeleteTeam }) => (
+   <section id="saved-teams" className="mb-12 scroll-mt-20">
+     <SectionHeader title="Minhas Equipes" color="#8B5CF6" />
+     {teams.length > 0 ? (
+       <div className="space-y-6">
+         {teams.map((team, index) => (
+           // MODIFICADO: Fundo do card da equipe
+           <div key={index} className="bg-gray-800/50 p-4 rounded-lg shadow-md relative">
+             <h4 className="font-bold text-lg mb-2 text-white">Equipe {index + 1}</h4>
+             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+               {team.map(pokemon => (
+                   <div key={pokemon.id} className="flex flex-col items-center">
+                     <img src={pokemon.sprites.front_default} alt={pokemon.name} className="w-20 h-20" />
+                     <p className="text-xs capitalize font-semibold text-gray-200">{pokemon.name}</p>
+                   </div>
+               ))}
+             </div>
+               <button onClick={() => onDeleteTeam(index)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 font-bold text-xl">&times;</button>
+           </div>
+         ))}
+       </div>
+     ) : (
+       // MODIFICADO: Cor do texto para cinza claro
+        <p className="text-gray-400 italic pl-4">Você ainda não salvou nenhuma equipe.</p>
+     )}
+   </section>
+ );
+
+  //--- COMPONENTES DE ITENS ---
+ const ItemCard = ({ item, onClick }) => (
+   <div
+     onClick={() => onClick(item)}
+      // MODIFICADO: Fundo do card de item
+     className="group cursor-pointer bg-gray-800/50 backdrop-blur-sm border border-gray-600 rounded-lg shadow-md hover:shadow-xl hover:border-gray-500 transition-all duration-300 p-4 flex flex-col items-center text-center"
+   >
+     <img src={item.sprites.default} alt={item.name} className="w-16 h-16 object-contain group-hover:scale-125 transition-transform" />
+     {/* MODIFICADO: Cor do texto do item */}
+     <h3 className="mt-2 text-md font-bold text-gray-100 capitalize">{item.name.replace(/-/g, ' ')}</h3>
+   </div>
+ );
+
+ const ItemsSection = ({ items, onCardClick, isLoading, error }) => (
+   <section id="items" className="mb-12 scroll-mt-20">
+     <SectionHeader title="Itens Pokémon" color="#A0A0A0" />
+     {/* MODIFICADO: Cor do texto de loading */}
+     {isLoading && <p className="text-gray-400 italic pl-4">Carregando itens...</p>}
+     {error && <p className="text-center text-red-500 bg-red-100 p-3 rounded-lg">{error}</p>}
+     {!isLoading && !error && (
+       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+         {items.map(item => (
+           <ItemCard key={item.id} item={item} onClick={onCardClick} />
+         ))}
+       </div>
+     )}
+   </section>
+ );
+
+ const ItemModal = ({ item, onClose }) => {
+   if (!item) return null;
+  
+   const effectEntry = item.effect_entries.find(entry => entry.language.name === 'en');
+   const description = effectEntry ? effectEntry.short_effect : 'Nenhuma descrição disponível.';
+
+   return (
+     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50" onClick={onClose}>
+       <div className="bg-white rounded-xl shadow-2xl w-11/12 max-w-md mx-auto p-6 relative text-gray-900" onClick={(e) => e.stopPropagation()}>
+         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+         <div className="flex flex-col items-center text-center">
+           <img src={item.sprites.default} alt={item.name} className="w-24 h-24 object-contain drop-shadow-lg" />
+           <h2 className="text-2xl font-bold text-gray-900 mt-4 capitalize">{item.name.replace(/-/g, ' ')}</h2>
+           <div className="mt-4 text-gray-700 w-full text-left p-4 bg-gray-50 rounded-lg min-h-[100px]">
+             <h4 className="font-bold mb-2">Efeito</h4>
+             <p>{description}</p>
+           </div>
+         </div>
+       </div>
+     </div>
+   );
+ };
+
+ // --- COMPONENTES DE MECÂNICAS ESPECIAIS ---
+
+ const SpecialFormCard = ({ pokemon, onClick, onFavoriteToggle, isFavorite }) => {
+   const imageUrl = pokemon.sprites?.other?.['official-artwork']?.front_default;
+   return (
+     <div
+        // MODIFICADO: Fundo do card
+       className="group relative bg-gray-800/50 backdrop-blur-sm border border-gray-600 rounded-lg shadow-md hover:shadow-xl hover:border-gray-500 transition-all duration-300 p-4 flex flex-col items-center text-center"
+     >
+       <div onClick={() => onClick(pokemon)} className="cursor-pointer">
+         {imageUrl ? (
+           <img src={imageUrl} alt={pokemon.name} className="w-32 h-32 object-contain drop-shadow-lg group-hover:scale-110 transition-transform" />
+         ) : (
+           <div className="w-32 h-32 flex items-center justify-center text-gray-400">Sem Imagem</div>
+         )}
+         {/* MODIFICADO: Cor do texto */}
+         <h3 className="mt-2 text-lg font-bold text-gray-100 capitalize">{pokemon.name.replace(/-/g, ' ')}</h3>
+       </div>
+       {onFavoriteToggle && (
+            <button onClick={() => onFavoriteToggle(pokemon)} className="absolute top-2 right-2 text-yellow-400 hover:text-yellow-500 transition-colors z-10">
+            <FavoriteIcon isFavorite={isFavorite} />
+          </button>
+        )}
+     </div>
+   );
+ };
+
+ const SpecialMechanicSection = ({ id, title, color, data, cardComponent: CardComponent, onCardClick, isLoading, onFavoriteToggle, favorites }) => (
+   <section id={id} className="mb-12 scroll-mt-20">
+     <SectionHeader title={title} color={color} />
+     {isLoading ? (
+       // MODIFICADO: Cor do texto de loading
+       <p className="text-gray-400 italic pl-4">Carregando...</p>
+     ) : (
+         data.length > 0 ? (
+           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+             {data.map(item => (
+               <CardComponent 
+                 key={item.id} 
+                 pokemon={item}
+                 onClick={onCardClick}
+                 onFavoriteToggle={onFavoriteToggle}
+                 isFavorite={favorites?.some(fav => fav.id === item.id)}
+               />
+             ))}
+           </div>
+         ) : (
+           // MODIFICADO: Cor do texto de aviso
+          <p className="text-gray-400 italic pl-4">Pesquise por Pokémon e adicione aos favoritos para vê-los aqui.</p>
+         )
+     )}
+   </section>
+ );
+
+
+//  --- MAIN COMPONENT: App ---
+ function App() {
+   const [searchTerm, setSearchTerm] = useState('');
+   const [searchResult, setSearchResult] = useState(null);
+   const [isLoading, setIsLoading] = useState(false);
+   const [error, setError] = useState(null);
+
+   // ADDED: Estados para autocompletar
+   const [allPokemonNames, setAllPokemonNames] = useState([]);
+   const [suggestions, setSuggestions] = useState([]);
+  
+   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('pokedex-favorites')) || []);
+   const [megaEvolutions, setMegaEvolutions] = useState(() => JSON.parse(localStorage.getItem('pokedex-megas')) || []);
+   const [gigantamaxForms, setGigantamaxForms] = useState(() => JSON.parse(localStorage.getItem('pokedex-gmax')) || []);
+  
+   const [pokemonsByType, setPokemonsByType] = useState(() => populateTypesFromFavorites(JSON.parse(localStorage.getItem('pokedex-favorites')) || []));
+  
+   const [selectedPokemon, setSelectedPokemon] = useState(null);
+   const [isModalLoading, setIsModalLoading] = useState(false);
+
+   const [savedTeams, setSavedTeams] = useState(() => JSON.parse(localStorage.getItem('pokedex-teams')) || []);
+
+   const [items, setItems] = useState([]);
+   const [isLoadingItems, setIsLoadingItems] = useState(true);
+   const [itemsError, setItemsError] = useState(null);
+   const [selectedItem, setSelectedItem] = useState(null);
+  
+    // ADDED: Busca a lista completa de nomes na inicialização
+    useEffect(() => {
+        const fetchAllNames = async () => {
+            try {
+                // limit=2000 garante que pegamos todos os pokemons existentes
+                const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=2000');
+                if(!response.ok) return;
+                const data = await response.json();
+                setAllPokemonNames(data.results.map(p => p.name));
+            } catch (err) {
+                console.error("Erro ao carregar lista de nomes", err);
+            }
+        };
+        fetchAllNames();
+    }, []);
+
+   useEffect(() => {
+     if (searchTerm.trim() === '') {
+       setSearchResult(null);
+       setError(null);
+       setSuggestions([]); // Limpa sugestões se vazio
+     }
+   }, [searchTerm]);
+
+   useEffect(() => {
+     const fetchItems = async () => {
+         try {
+             const response = await fetch('https://pokeapi.co/api/v2/item?limit=40');
+             if (!response.ok) throw new Error('Não foi possível buscar a lista de itens.');
+             const listData = await response.json();
+
+             const itemPromises = listData.results.map(item => fetch(item.url).then(res => res.json()));
+             const itemsData = await Promise.all(itemPromises);
+             setItems(itemsData);
+         } catch (err) {
+             setItemsError(err.message);
+         } finally {
+             setIsLoadingItems(false);
+         }
+     };
+    
+     fetchItems();
+   }, []);
+
+   // ADDED: Função para lidar com a digitação e filtro
+   const handleInputChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+
+    if (value.length > 0) {
+        // Filtra os nomes que contêm o texto digitado (limite de 5 sugestões)
+        const filteredSuggestions = allPokemonNames
+            .filter(name => name.includes(value.toLowerCase()))
+            .slice(0, 5);
+        setSuggestions(filteredSuggestions);
+    } else {
+        setSuggestions([]);
+    }
+   };
+
+   // ADDED: Função ao clicar em uma sugestão
+   const handleSuggestionClick = (name) => {
+       setSearchTerm(name);
+       setSuggestions([]);
+       // Opcional: Disparar a busca automaticamente?
+       // Se quiser, pode chamar handleSearch({ preventDefault: () => {} }) aqui,
+       // mas precisaria refatorar handleSearch para aceitar o nome como argumento opcional.
+       // Por enquanto, apenas preenche o campo.
+   };
+
+   const handleSearch = async (e) => {
+     e.preventDefault();
+     if (!searchTerm) return;
+     setIsLoading(true);
+     setError(null);
+     setSearchResult(null);
+     setSuggestions([]); // Esconde sugestões ao buscar
+     try {
+       const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${searchTerm.toLowerCase().trim().replace(/ /g, '-')}`);
+       if (!response.ok) throw new Error('Pokémon não encontrado!');
+       const data = await response.json();
+       setSearchResult(data);
+     } catch (err) {
+       setError(err.message);
+     } finally {
+       setIsLoading(false);
+     }
+   };
+
+   const handleFavoriteToggle = (pokemon) => {
+     const isAlreadyFavorite = favorites.some(fav => fav.id === pokemon.id);
+     let updatedFavorites = [...favorites];
+     let updatedMegas = [...megaEvolutions];
+     let updatedGmax = [...gigantamaxForms];
+
+     if (isAlreadyFavorite) {
+       updatedFavorites = favorites.filter(fav => fav.id !== pokemon.id);
+       if (pokemon.name.includes('-mega')) {
+         updatedMegas = megaEvolutions.filter(p => p.id !== pokemon.id);
+       }
+       if (pokemon.name.includes('-gmax')) {
+         updatedGmax = gigantamaxForms.filter(p => p.id !== pokemon.id);
+       }
+     } else {
+       updatedFavorites.push(pokemon);
+       if (pokemon.name.includes('-mega')) {
+         updatedMegas.push(pokemon);
+       }
+       if (pokemon.name.includes('-gmax')) {
+         updatedGmax.push(pokemon);
+       }
+     }
+
+     setFavorites(updatedFavorites);
+     setMegaEvolutions(updatedMegas);
+     setGigantamaxForms(updatedGmax);
+     setPokemonsByType(populateTypesFromFavorites(updatedFavorites));
+
+     localStorage.setItem('pokedex-favorites', JSON.stringify(updatedFavorites));
+     localStorage.setItem('pokedex-megas', JSON.stringify(updatedMegas));
+     localStorage.setItem('pokedex-gmax', JSON.stringify(updatedGmax));
+   };
+
+
+   const handleCardClick = async (pokemon) => {
+     setIsModalLoading(true);
+     setSelectedPokemon(pokemon);
+
+     try {
+       const speciesUrl = pokemon.species?.url || `https://pokeapi.co/api/v2/pokemon-species/${pokemon.id}`;
+       const response = await fetch(speciesUrl);
+       if (!response.ok) throw new Error('Não foi possível obter detalhes da espécie.');
+       const speciesData = await response.json();
+       const englishEntry = speciesData.flavor_text_entries.find(entry => entry.language.name === 'en');
+       const description = englishEntry ? englishEntry.flavor_text.replace(/[\n\f]/g, ' ') : 'Nenhuma descrição encontrada.';
+      
+       setSelectedPokemon(prev => ({ ...prev, description }));
+     } catch (err) {
+       console.error(err);
+       setSelectedPokemon(prev => ({ ...prev, description: 'Não foi possível carregar a descrição.' }));
+     } finally {
+       setIsModalLoading(false);
+     }
+   };
+
+   const handleCloseModal = () => {
+     setSelectedPokemon(null);
+   };
+
+   const handleSaveTeam = (team) => {
+     const newSavedTeams = [...savedTeams, team];
+     setSavedTeams(newSavedTeams);
+     localStorage.setItem('pokedex-teams', JSON.stringify(newSavedTeams));
+   };
+
+   const handleDeleteTeam = (teamIndex) => {
+     const newSavedTeams = savedTeams.filter((_, index) => index !== teamIndex);
+     setSavedTeams(newSavedTeams);
+     localStorage.setItem('pokedex-teams', JSON.stringify(newSavedTeams));
+   };
+  
+   const handleItemCardClick = (item) => {
+     setSelectedItem(item);
+   };
+
+   const handleCloseItemModal = () => {
+     setSelectedItem(null);
+   };
+
+   return (
+     // MODIFICADO: Gradiente de cinza escuro para cinza médio e cor de texto padrão para branco
+     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-700 font-sans text-white" style={{scrollBehavior: 'smooth'}}>
+       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        
+         <header className="text-center mb-12">
+           <div className="flex justify-center items-center gap-4 mb-4">
+             <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Pok%C3%A9_Ball_icon.svg" alt="Poké Ball" className="w-12 h-12" />
+             <h1 className="text-5xl font-extrabold text-white drop-shadow-lg">Integrated Pokédex</h1>
+             <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Pok%C3%A9_Ball_icon.svg" alt="Poké Ball" className="w-12 h-12" />
+           </div>
+           
+           {/* MODIFICADO: Relativo para posicionar as sugestões */}
+           <form onSubmit={handleSearch} className="max-w-md mx-auto relative">
+             <input
+               type="text"
+               value={searchTerm}
+               onChange={handleInputChange} // Usando o novo handler
+               placeholder="Digite o nome ou número do pokémon..."
+               className="w-full px-4 py-2 rounded-full bg-white/90 text-gray-900 placeholder-gray-500 shadow-lg shadow-red-800/20 border-2 border-transparent focus:border-red-500 focus:ring-2 focus:ring-red-500/50 focus:outline-none transition"
+             />
+            
+             {/* ADDED: Lista de Sugestões */}
+             {suggestions.length > 0 && (
+                <ul className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl overflow-hidden text-gray-900">
+                    {suggestions.map((suggestion, index) => (
+                        <li 
+                            key={index}
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            className="px-4 py-2 hover:bg-gray-200 cursor-pointer capitalize font-medium transition-colors"
+                        >
+                            {suggestion.replace(/-/g, ' ')}
+                        </li>
+                    ))}
+                </ul>
+             )}
+           </form>
+         </header>
+
+         <main>
+           <section id="search-results" className="mb-12">
+             {isLoading && <p className="text-center text-white">Procurando...</p>}
+             {error && <p className="text-center text-red-500 bg-red-100 p-3 rounded-lg">{error}</p>}
+             {searchResult && (
+               <div>
+                   <SectionHeader title="Resultado da Busca" color="#EF4444" />
+                   <div className="flex justify-center">
+                     <PokemonCard
+                         pokemon={searchResult}
+                         onFavoriteToggle={handleFavoriteToggle}
+                         isFavorite={favorites.some(fav => fav.id === searchResult.id)}
+                         onClick={handleCardClick}
+                     />
+                   </div>
+               </div>
+             )}
+           </section>
+
+           <TypeNavigation types={pokemonTypeColors} />
+
+           <section id="favorites" className="mb-12 scroll-mt-20">
+             <SectionHeader title="Favoritos" color="#FBBF24" />
+             {favorites.length > 0 ? (
+               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                 {favorites.map(p => (
+                   <PokemonCard 
+                     key={p.id} 
+                     pokemon={p} 
+                     onFavoriteToggle={handleFavoriteToggle} 
+                     isFavorite={true}
+                     onClick={handleCardClick}
+                   />
+                 ))}
+               </div>
+             ) : (
+               // MODIFICADO: Cor do texto de aviso
+               <p className="text-gray-400 italic pl-4">Você ainda não adicionou nenhum Pokémon aos seus favoritos.</p>
+             )}
+           </section>
+
+           <TeamBuilder favorites={favorites} onSaveTeam={handleSaveTeam} />
+          
+           <SavedTeams teams={savedTeams} onDeleteTeam={handleDeleteTeam} />
+          
+           <SpecialMechanicSection
+             id="mega-evolutions"
+             title="Mega Evoluções"
+             color="#4A5568"
+             data={megaEvolutions}
+             cardComponent={SpecialFormCard}
+             onCardClick={handleCardClick}
+             onFavoriteToggle={handleFavoriteToggle}
+             favorites={favorites}
+           />
+
+           <SpecialMechanicSection
+             id="gigantamax"
+             title="Gigantamax"
+             color="#EF4444"
+             data={gigantamaxForms}
+             cardComponent={SpecialFormCard}
+             onCardClick={handleCardClick}
+             onFavoriteToggle={handleFavoriteToggle}
+             favorites={favorites}
+           />
+          
+           <ItemsSection
+             items={items}
+             onCardClick={handleItemCardClick}
+             isLoading={isLoadingItems}
+             error={itemsError}
+           />
+          
+           {Object.entries(pokemonTypeColors).map(([type, color]) => (
+             pokemonsByType[type] && pokemonsByType[type].length > 0 && (
+               <TypeSection
+                 key={type}
+                 type={type}
+                 color={color}
+                 pokemons={pokemonsByType[type]}
+                 onFavoriteToggle={handleFavoriteToggle}
+                 favorites={favorites}
+                 onCardClick={handleCardClick}
+               />
+             )
+           ))}
+         </main>
+       </div>
+
+       {selectedPokemon && (
+         <PokemonModal 
+           pokemon={selectedPokemon} 
+           onClose={handleCloseModal}
+           isLoading={isModalLoading} 
+         />
+       )}
+
+       {selectedItem && (
+         <ItemModal 
+           item={selectedItem}
+           onClose={handleCloseItemModal}
+         />
+       )}
+
+     </div>
+   );
+ }
+
+
+
+ export default App;
