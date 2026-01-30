@@ -132,7 +132,7 @@ Use o **Amazon CloudWatch** para monitorar instâncias do EC2:
 ---
 ![](image/image21.png)
 ![](image/image22.png)
-
+![](image/image26.png)
 ---
 
 ### Serviços de contêiner
