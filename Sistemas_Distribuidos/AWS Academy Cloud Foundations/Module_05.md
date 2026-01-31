@@ -77,7 +77,7 @@
 
  
  - Os grupos de segurança têm regras que controlam o tráfego de entrada e de saída da instância.
-
+ - Eles usam "Permissões" (Allow), não "Negações" (Deny)
 > ACLs: Uma ACL da rede tem regras de entrada e de saída separadas, e cada regra pode permitir ou rejeitar tráfego.
 ---
 ![](image/image13.png)
