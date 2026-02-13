@@ -72,6 +72,7 @@ O IAM permite controlar o acesso a serviços de computação, armazenamento, ban
 ![](image/image5.png)
 ![](image/image6.png)
 ![](image/image7.png)
+
 ---
 
 
