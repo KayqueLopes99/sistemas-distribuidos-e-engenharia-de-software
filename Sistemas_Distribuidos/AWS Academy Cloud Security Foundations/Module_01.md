@@ -20,4 +20,8 @@ Descrição do curso
 
 - Explicar os métodos disponíveis para criptografar dados em repouso e em trânsito.
 
-- Determinar quais serviços da AWS podem ser usados para monitoramento e resposta a incidentes.5
+- Determinar quais serviços da AWS podem ser usados para monitoramento e resposta a incidentes.
+
+> Documentação: https://docs.aws.amazon.com/
+
+- Cenários do curso Banco $$$.
